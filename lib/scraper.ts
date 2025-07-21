@@ -109,6 +109,50 @@ interface InstagramSharedData {
   };
 }
 
+// Add proper type for RapidAPI response
+interface RapidAPIResponse {
+  shortcode?: string;
+  id?: string;
+  owner?: {
+    username?: string;
+    profile_pic_url?: string;
+    edge_followed_by?: { count?: number };
+    edge_follow?: { count?: number };
+  };
+  username?: string;
+  profilePicUrl?: string;
+  edge_media_to_caption?: {
+    edges?: Array<{
+      node?: { text?: string };
+    }>;
+  };
+  caption?: string;
+  video_view_count?: number;
+  playCount?: number;
+  edge_media_preview_like?: { count?: number };
+  likesCount?: number;
+  edge_media_to_comment?: {
+    count?: number;
+    edges?: Array<{
+      node?: {
+        id?: string;
+        text?: string;
+        owner?: { username?: string };
+        edge_liked_by?: { count?: number };
+        created_at?: number;
+        edge_threaded_comments?: { count?: number };
+      };
+    }>;
+  };
+  commentsCount?: number;
+  video_duration?: number;
+  videoDuration?: number;
+  taken_at_timestamp?: number;
+  timestamp?: string;
+  display_url?: string;
+  thumbnailUrl?: string;
+}
+
 class InstagramScraper {
   private rapidApiKey: string;
   private apifyToken: string;
@@ -294,10 +338,14 @@ class InstagramScraper {
     return reelData;
   }
 
+  // Fixed the formatReelData method to use proper typing
   private formatReelData(rawData: unknown): ScrapedReelData {
-    // This method would need to be adapted based on RapidAPI response structure
-    // For now, returning a basic structure
-    const data = rawData as any;
+    // Type guard to ensure we have the expected structure
+    if (!rawData || typeof rawData !== "object") {
+      throw new Error("Invalid data structure received from API");
+    }
+
+    const data = rawData as RapidAPIResponse;
 
     return {
       reelId: data.shortcode || data.id || "",
