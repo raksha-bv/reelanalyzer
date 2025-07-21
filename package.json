@@ -6,22 +6,53 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "next": "15.4.2"
-  },
-  "devDependencies": {
-    "typescript": "^5",
+    "@google/genai": "^1.10.0",
+    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@tailwindcss/postcss": "^4",
+    "autoprefixer": "^10.0.1",
+    "axios": "^1.6.2",
+    "cheerio": "^1.0.0-rc.12",
+    "date-fns": "^2.30.0",
+    "lucide-react": "^0.525.0",
+    "mongoose": "^8.0.3",
+    "natural": "^6.10.0",
+    "next": "15.4.2",
+    "postcss": "^8",
+    "puppeteer": "^21.5.2",
+    "puppeteer-core": "^21.5.2",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "sentiment": "^5.0.2",
     "tailwindcss": "^4",
+    "typescript": "^5",
+    "whatwg-fetch": "^3.6.20",
+    "wordcloud": "^1.2.2",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/sentiment": "^5.0.4",
     "eslint": "^9",
     "eslint-config-next": "15.4.2",
-    "@eslint/eslintrc": "^3"
+    "jest": "^30.0.4",
+    "jest-environment-node": "^30.0.4",
+    "next-test-api-route-handler": "^5.0.0",
+    "tailwindcss": "^4",
+    "ts-jest": "^29.4.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5"
   }
 }
