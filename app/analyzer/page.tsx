@@ -10,16 +10,11 @@ import {
   Clock,
   User,
   Hash,
-  Download,
   Zap,
-  Target,
   CheckCircle,
-  X,
   BarChart3,
   Sparkles,
   Calendar,
-  Activity,
-  Mic,
   Filter,
   ArrowUpRight,
   ArrowDownRight,
@@ -78,45 +73,47 @@ const ReelAnalyzer = () => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<ReelData | null>(null);
 
-  const validateReelData = (data: any): ReelData => {
+  const validateReelData = (data: unknown): ReelData => {
+    const safeData = data as Record<string, unknown>;
+
     return {
-      username: data.username || "unknown",
-      userProfilePic: data.userProfilePic || "",
-      caption: data.caption || "",
-      viewCount: data.viewCount || 0,
-      likesCount: data.likesCount || 0,
-      commentsCount: data.commentsCount || 0,
-      sharesCount: data.sharesCount || 0,
-      duration: data.duration || 0,
-      postDate: data.postDate || new Date().toISOString(),
-      engagementRate: data.engagementRate || 0,
-      viralityScore: data.viralityScore || 0,
-      category: data.category || "general",
-      captionSentiment: data.captionSentiment || {
+      username: (safeData.username as string) || "unknown",
+      userProfilePic: (safeData.userProfilePic as string) || "",
+      caption: (safeData.caption as string) || "",
+      viewCount: (safeData.viewCount as number) || 0,
+      likesCount: (safeData.likesCount as number) || 0,
+      commentsCount: (safeData.commentsCount as number) || 0,
+      sharesCount: (safeData.sharesCount as number) || 0,
+      duration: (safeData.duration as number) || 0,
+      postDate: (safeData.postDate as string) || new Date().toISOString(),
+      engagementRate: (safeData.engagementRate as number) || 0,
+      viralityScore: (safeData.viralityScore as number) || 0,
+      category: (safeData.category as string) || "general",
+      captionSentiment: (safeData.captionSentiment as Sentiment) || {
         positive: 0,
         negative: 0,
         neutral: 100,
         overall: "neutral",
         score: 0,
       },
-      commentsSentiment: data.commentsSentiment || {
+      commentsSentiment: (safeData.commentsSentiment as Sentiment) || {
         positive: 0,
         negative: 0,
         neutral: 100,
         overall: "neutral",
         score: 0,
       },
-      overallSentiment: data.overallSentiment || {
+      overallSentiment: (safeData.overallSentiment as Sentiment) || {
         positive: 0,
         negative: 0,
         neutral: 100,
         overall: "neutral",
         score: 0,
       },
-      topComments: data.topComments || [],
-      wordCloud: data.wordCloud || [],
-      hashtags: data.hashtags || [],
-      spamCommentsCount: data.spamCommentsCount || 0,
+      topComments: (safeData.topComments as Comment[]) || [],
+      wordCloud: (safeData.wordCloud as WordCloudItem[]) || [],
+      hashtags: (safeData.hashtags as HashtagItem[]) || [],
+      spamCommentsCount: (safeData.spamCommentsCount as number) || 0,
     };
   };
 

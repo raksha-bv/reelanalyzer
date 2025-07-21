@@ -8,11 +8,6 @@ interface SentimentResult {
   score: number;
 }
 
-interface CommentAnalysis {
-  sentiment: SentimentResult;
-  isSpam: boolean;
-}
-
 interface CompleteAnalysis {
   captionSentiment: SentimentResult;
   commentsSentiment: SentimentResult;
@@ -29,6 +24,38 @@ interface CompleteAnalysis {
   category: string;
 }
 
+interface GeminiAnalysisResponse {
+  captionSentiment?: {
+    positive?: number;
+    negative?: number;
+    neutral?: number;
+    overall?: string;
+    score?: number;
+  };
+  commentsSentiment?: {
+    positive?: number;
+    negative?: number;
+    neutral?: number;
+    overall?: string;
+    score?: number;
+  };
+  comments?: Array<{
+    index?: number;
+    sentiment?: string;
+    isSpam?: boolean;
+  }>;
+  category?: string;
+}
+
+interface CommentInput {
+  id: string;
+  text: string;
+  author: string;
+  likes: number;
+  timestamp: Date;
+  replies: number;
+}
+
 class GeminiSentimentAnalyzer {
   private client: GoogleGenAI;
 
@@ -43,17 +70,9 @@ class GeminiSentimentAnalyzer {
     });
   }
 
-  // NEW: Single comprehensive analysis method
   async analyzeComplete(
     caption: string,
-    comments: Array<{
-      id: string;
-      text: string;
-      author: string;
-      likes: number;
-      timestamp: Date;
-      replies: number;
-    }>
+    comments: CommentInput[]
   ): Promise<CompleteAnalysis> {
     if (!comments || comments.length === 0) {
       const captionSentiment = await this.analyzeTextFallback(caption);
@@ -66,12 +85,10 @@ class GeminiSentimentAnalyzer {
     }
 
     try {
-      // Create numbered list of comments for the prompt
       const commentsList = comments
         .map((comment, index) => `${index + 1}. "${comment.text}"`)
         .join("\n");
 
-      // Combine all text for category prediction
       const allText = [
         caption,
         ...comments.slice(0, 5).map((c) => c.text),
@@ -140,16 +157,14 @@ Rules:
         throw new Error("Empty response from Gemini");
       }
 
-      // Extract JSON from response
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         console.error("No JSON found in response:", responseText);
         return this.getFallbackAnalysis(caption, comments);
       }
 
-      const result = JSON.parse(jsonMatch[0]);
+      const result: GeminiAnalysisResponse = JSON.parse(jsonMatch[0]);
 
-      // Validate and process the response
       const captionSentiment = this.validateSentimentResult(
         result.captionSentiment
       );
@@ -157,11 +172,8 @@ Rules:
         result.commentsSentiment
       );
 
-      // Map results back to original comments
       const processedComments = comments.map((comment, index) => {
-        const analysis = result.comments?.find(
-          (r: any) => r.index === index + 1
-        );
+        const analysis = result.comments?.find((r) => r.index === index + 1);
         return {
           ...comment,
           sentiment: this.validateSentimentType(analysis?.sentiment),
@@ -187,8 +199,8 @@ Rules:
         "news",
         "other",
       ];
-      const category = validCategories.includes(result.category)
-        ? result.category
+      const category = validCategories.includes(result.category || "")
+        ? result.category!
         : "general";
 
       return {
@@ -203,7 +215,9 @@ Rules:
     }
   }
 
-  private validateSentimentResult(sentiment: any): SentimentResult {
+  private validateSentimentResult(
+    sentiment: GeminiAnalysisResponse["captionSentiment"]
+  ): SentimentResult {
     return {
       positive: Math.round(
         Math.max(0, Math.min(100, sentiment?.positive || 0))
@@ -212,18 +226,20 @@ Rules:
         Math.max(0, Math.min(100, sentiment?.negative || 0))
       ),
       neutral: Math.round(Math.max(0, Math.min(100, sentiment?.neutral || 0))),
-      overall: ["positive", "negative", "neutral"].includes(sentiment?.overall)
-        ? sentiment.overall
+      overall: ["positive", "negative", "neutral"].includes(
+        sentiment?.overall || ""
+      )
+        ? (sentiment!.overall as "positive" | "negative" | "neutral")
         : "neutral",
       score: Math.max(-1, Math.min(1, sentiment?.score || 0)),
     };
   }
 
   private validateSentimentType(
-    sentiment: any
+    sentiment: unknown
   ): "positive" | "negative" | "neutral" {
-    return ["positive", "negative", "neutral"].includes(sentiment)
-      ? sentiment
+    return ["positive", "negative", "neutral"].includes(sentiment as string)
+      ? (sentiment as "positive" | "negative" | "neutral")
       : "neutral";
   }
 
@@ -238,15 +254,8 @@ Rules:
   }
 
   private getFallbackAnalysis(
-    caption: string,
-    comments: Array<{
-      id: string;
-      text: string;
-      author: string;
-      likes: number;
-      timestamp: Date;
-      replies: number;
-    }>
+    _caption: string,
+    comments: CommentInput[]
   ): CompleteAnalysis {
     return {
       captionSentiment: this.getDefaultSentiment(),
@@ -260,7 +269,6 @@ Rules:
     };
   }
 
-  // Fallback method for caption-only analysis
   private async analyzeTextFallback(text: string): Promise<SentimentResult> {
     if (!text || text.trim().length === 0) {
       return this.getDefaultSentiment();
@@ -305,7 +313,6 @@ Return only valid JSON in this exact format:
     }
   }
 
-  // Keep existing utility methods for backward compatibility and other calculations
   calculateEngagementRate(
     likes: number,
     comments: number,
@@ -331,11 +338,11 @@ Return only valid JSON in this exact format:
   }
 
   generateWordCloud(
-    comments: string[]
+    commentTexts: string[]
   ): Array<{ word: string; count: number }> {
-    if (!comments || comments.length === 0) return [];
+    if (!commentTexts || commentTexts.length === 0) return [];
 
-    const text = comments.join(" ").toLowerCase();
+    const text = commentTexts.join(" ").toLowerCase();
     const words = text.match(/\b[a-zA-Z]{3,}\b/g) || [];
 
     const stopWords = new Set([
@@ -435,18 +442,22 @@ Return only valid JSON in this exact format:
       .slice(0, 20);
   }
 
-  // Legacy methods kept for backward compatibility (but not used in the optimized flow)
   async analyzeText(text: string): Promise<SentimentResult> {
     return this.analyzeTextFallback(text);
   }
 
-  async analyzeComments(comments: string[]): Promise<SentimentResult> {
-    // This method is now redundant but kept for compatibility
+  async analyzeComments(_commentsTexts: string[]): Promise<SentimentResult> {
     return this.getDefaultSentiment();
   }
 
-  async analyzeBatchComments(comments: Array<any>): Promise<Array<any>> {
-    // This method is now redundant but kept for compatibility
+  async analyzeBatchComments(comments: Array<CommentInput>): Promise<
+    Array<
+      CommentInput & {
+        sentiment: "positive" | "negative" | "neutral";
+        isSpam: boolean;
+      }
+    >
+  > {
     return comments.map((comment) => ({
       ...comment,
       sentiment: "neutral" as const,
@@ -454,8 +465,10 @@ Return only valid JSON in this exact format:
     }));
   }
 
-  async predictCategory(caption: string, comments: string[]): Promise<string> {
-    // This method is now redundant but kept for compatibility
+  async predictCategory(
+    _caption: string,
+    _commentsTexts: string[]
+  ): Promise<string> {
     return "general";
   }
 }

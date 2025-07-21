@@ -26,32 +26,87 @@ export interface ScrapedReelData {
   }>;
 }
 
-export interface ScrapedProfileData {
-  id: string;
+// Simple profile interface for basic user info from reel data
+export interface BasicProfileData {
   username: string;
-  fullName: string;
-  biography: string;
-  externalUrl?: string;
-  followersCount: number;
-  followsCount: number;
-  hasChannel: boolean;
-  highlightReelCount: number;
-  isBusinessAccount: boolean;
-  joinedRecently: boolean;
-  businessCategoryName?: string;
-  private: boolean;
-  verified: boolean;
-  profilePicUrl: string;
-  profilePicUrlHD: string;
-  facebookPage?: string;
-  igtvVideoCount: number;
-  postsCount: number;
-  avgLikesPerPost?: number;
-  avgCommentsPerPost?: number;
-  engagementRate?: number;
-  contentCategories?: string[];
-  postingFrequency?: string;
-  audienceGrowthRate?: number;
+  userProfilePic: string;
+  userFollowers?: number;
+  userFollowing?: number;
+  userPostsCount?: number;
+}
+
+interface ApifyReelResponse {
+  shortCode?: string;
+  id?: string;
+  ownerUsername?: string;
+  ownerProfilePicUrl?: string;
+  ownerFollowersCount?: number;
+  ownerFollowingCount?: number;
+  ownerPostsCount?: number;
+  caption?: string;
+  videoViewCount?: number;
+  videoPlayCount?: number;
+  likesCount?: number;
+  commentsCount?: number;
+  videoDuration?: number;
+  timestamp?: string;
+  displayUrl?: string;
+  images?: string[];
+  latestComments?: Array<{
+    id?: string;
+    text?: string;
+    ownerUsername?: string;
+    owner?: { username?: string };
+    likesCount?: number;
+    timestamp?: string;
+    repliesCount?: number;
+  }>;
+}
+
+interface InstagramSharedData {
+  entry_data?: {
+    PostPage?: Array<{
+      graphql?: {
+        shortcode_media?: {
+          shortcode?: string;
+          id?: string;
+          owner?: {
+            username?: string;
+            profile_pic_url?: string;
+            edge_followed_by?: { count?: number };
+            edge_follow?: { count?: number };
+          };
+          edge_media_to_caption?: {
+            edges?: Array<{
+              node?: { text?: string };
+            }>;
+          };
+          video_view_count?: number;
+          playCount?: number;
+          edge_media_preview_like?: { count?: number };
+          edge_media_to_comment?: {
+            count?: number;
+            edges?: Array<{
+              node?: {
+                id?: string;
+                text?: string;
+                owner?: { username?: string };
+                edge_liked_by?: { count?: number };
+                created_at?: number;
+                edge_threaded_comments?: { count?: number };
+              };
+            }>;
+          };
+          video_duration?: number;
+          videoDuration?: number;
+          taken_at_timestamp?: number;
+          timestamp?: string;
+          display_url?: string;
+          thumbnailUrl?: string;
+        };
+      };
+    }>;
+  };
 }
 
 class InstagramScraper {
@@ -63,193 +118,15 @@ class InstagramScraper {
     this.apifyToken = process.env.APIFY_API_KEY || "";
   }
 
-  // Extract reel ID from URL
   extractReelId(url: string): string {
     const match = url.match(/\/reel\/([A-Za-z0-9_-]+)/);
     return match ? match[1] : "";
   }
-  // Replace your scrapeProfile method with better debugging:
-  async scrapeProfile(username: string): Promise<ScrapedProfileData> {
-    try {
-      const runInput = {
-        usernames: [username],
-        resultsType: "details",
-        resultsLimit: 1,
-        addParentData: true,
-      };
 
-      console.log(`=== PROFILE SCRAPING DEBUG ===`);
-      console.log(`Username: ${username}`);
-      console.log(`Apify Token exists: ${!!this.apifyToken}`);
-      console.log(`Run input:`, JSON.stringify(runInput, null, 2));
-
-      const response = await axios.post(
-        `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${this.apifyToken}`,
-        runInput,
-        {
-          headers: { "Content-Type": "application/json" },
-          timeout: 300000,
-        }
-      );
-
-      console.log(`Response status: ${response.status}`);
-      console.log(`Response data:`, JSON.stringify(response.data, null, 2));
-
-      const data = response.data;
-      if (!data || data.length === 0) {
-        console.log(
-          `No profile data returned for ${username} - trying alternative approach`
-        );
-        throw new Error(`No profile data returned for ${username}`);
-      }
-
-      const profileData = data[0];
-      console.log(`Profile data found:`, Object.keys(profileData));
-      return this.formatProfileData(profileData);
-    } catch (error: any) {
-      console.error("Profile scraping failed:", error.message);
-      if (error.response) {
-        console.error("Error response:", error.response.data);
-      }
-      throw error;
-    }
-  }
-
-  private formatProfileData(profileData: any): ScrapedProfileData {
-    // Calculate additional metrics
-    const avgLikesPerPost = profileData.latestPosts
-      ? profileData.latestPosts.reduce(
-          (sum: number, post: any) => sum + (post.likesCount || 0),
-          0
-        ) / profileData.latestPosts.length
-      : 0;
-
-    const avgCommentsPerPost = profileData.latestPosts
-      ? profileData.latestPosts.reduce(
-          (sum: number, post: any) => sum + (post.commentsCount || 0),
-          0
-        ) / profileData.latestPosts.length
-      : 0;
-
-    const engagementRate =
-      profileData.followersCount > 0
-        ? ((avgLikesPerPost + avgCommentsPerPost) /
-            profileData.followersCount) *
-          100
-        : 0;
-
-    return {
-      id: profileData.id || "",
-      username: profileData.username || "",
-      fullName: profileData.fullName || "",
-      biography: profileData.biography || "",
-      externalUrl: profileData.externalUrl,
-      followersCount: profileData.followersCount || 0,
-      followsCount: profileData.followsCount || 0,
-      hasChannel: profileData.hasChannel || false,
-      highlightReelCount: profileData.highlightReelCount || 0,
-      isBusinessAccount: profileData.isBusinessAccount || false,
-      joinedRecently: profileData.joinedRecently || false,
-      businessCategoryName: profileData.businessCategoryName,
-      private: profileData.private || false,
-      verified: profileData.verified || false,
-      profilePicUrl: profileData.profilePicUrl || "",
-      profilePicUrlHD:
-        profileData.profilePicUrlHD || profileData.profilePicUrl || "",
-      facebookPage: profileData.facebookPage,
-      igtvVideoCount: profileData.igtvVideoCount || 0,
-      postsCount: profileData.postsCount || 0,
-      avgLikesPerPost,
-      avgCommentsPerPost,
-      engagementRate,
-      contentCategories: this.analyzeContentCategories(
-        profileData.latestPosts || []
-      ),
-      postingFrequency: this.calculatePostingFrequency(
-        profileData.latestPosts || []
-      ),
-    };
-  }
-
-  private analyzeContentCategories(posts: any[]): string[] {
-    const categories = new Set<string>();
-
-    posts.forEach((post) => {
-      const caption = (post.caption || "").toLowerCase();
-
-      // Simple keyword-based categorization
-      if (
-        caption.includes("food") ||
-        caption.includes("recipe") ||
-        caption.includes("cooking")
-      ) {
-        categories.add("Food & Cooking");
-      }
-      if (
-        caption.includes("travel") ||
-        caption.includes("vacation") ||
-        caption.includes("explore")
-      ) {
-        categories.add("Travel");
-      }
-      if (
-        caption.includes("fitness") ||
-        caption.includes("workout") ||
-        caption.includes("gym")
-      ) {
-        categories.add("Fitness");
-      }
-      if (
-        caption.includes("fashion") ||
-        caption.includes("style") ||
-        caption.includes("outfit")
-      ) {
-        categories.add("Fashion");
-      }
-      if (
-        caption.includes("tech") ||
-        caption.includes("gadget") ||
-        caption.includes("review")
-      ) {
-        categories.add("Technology");
-      }
-      if (
-        caption.includes("music") ||
-        caption.includes("song") ||
-        caption.includes("concert")
-      ) {
-        categories.add("Music");
-      }
-      // Add more categories as needed
-    });
-
-    return Array.from(categories);
-  }
-
-  private calculatePostingFrequency(posts: any[]): string {
-    if (posts.length < 2) return "Unknown";
-
-    const timestamps = posts
-      .map((post) => new Date(post.timestamp))
-      .sort((a, b) => b.getTime() - a.getTime());
-
-    const daysDiff =
-      (timestamps[0].getTime() - timestamps[timestamps.length - 1].getTime()) /
-      (1000 * 60 * 60 * 24);
-    const avgDaysBetweenPosts = daysDiff / (posts.length - 1);
-
-    if (avgDaysBetweenPosts <= 1) return "Daily";
-    if (avgDaysBetweenPosts <= 3) return "3x per week";
-    if (avgDaysBetweenPosts <= 7) return "Weekly";
-    if (avgDaysBetweenPosts <= 14) return "Bi-weekly";
-    return "Monthly";
-  }
-
-  // RapidAPI approach
   async scrapeWithRapidAPI(url: string): Promise<ScrapedReelData> {
     try {
       const options = {
-        method: "GET",
+        method: "GET" as const,
         url: "https://instagram-scraper-api2.p.rapidapi.com/v1/post_info",
         params: { code_or_id_or_url: url },
         headers: {
@@ -268,15 +145,13 @@ class InstagramScraper {
     }
   }
 
-  // Apify approach
-  // Replace the existing scrapeWithApify method
   async scrapeWithApify(url: string): Promise<ScrapedReelData> {
     try {
       const runInput = {
         directUrls: [url],
         resultsType: "posts",
         resultsLimit: 1,
-        addParentData: true, // Change this to true to get owner data
+        addParentData: true,
       };
 
       const response = await axios.post(
@@ -294,59 +169,16 @@ class InstagramScraper {
       }
 
       const reelData = data[0];
-      return this.formatApifyReelData(reelData, url);
+      return this.formatApifyReelData(reelData);
     } catch (error) {
       console.error("Apify scraping failed:", error);
       throw new Error("Failed to scrape with Apify");
     }
   }
-  // Add this method to your InstagramScraper class:
-  private extractProfileFromReelData(
-    reelData: any,
-    scrapedReel: ScrapedReelData
-  ): ScrapedProfileData {
-    console.log("=== EXTRACTING PROFILE FROM REEL DATA ===");
-    console.log("Reel data keys:", Object.keys(reelData));
 
-    // Try to extract from different possible locations in the response
-    const ownerData = reelData.owner || reelData.user || {};
-
-    return {
-      id: ownerData.pk || ownerData.id || "",
-      username: scrapedReel.username,
-      fullName:
-        ownerData.full_name || ownerData.fullName || scrapedReel.username,
-      biography: ownerData.biography || "",
-      externalUrl: ownerData.external_url || ownerData.externalUrl,
-      followersCount:
-        scrapedReel.userFollowers || ownerData.follower_count || 0,
-      followsCount: scrapedReel.userFollowing || ownerData.following_count || 0,
-      hasChannel: ownerData.has_channel || false,
-      highlightReelCount: ownerData.highlight_reel_count || 0,
-      isBusinessAccount:
-        ownerData.is_business_account || ownerData.isBusinessAccount || false,
-      joinedRecently: ownerData.joined_recently || false,
-      businessCategoryName:
-        ownerData.business_category_name || ownerData.businessCategoryName,
-      private: ownerData.is_private || ownerData.private || false,
-      verified: ownerData.is_verified || ownerData.verified || false,
-      profilePicUrl:
-        scrapedReel.userProfilePic || ownerData.profile_pic_url || "",
-      profilePicUrlHD:
-        ownerData.profile_pic_url_hd || scrapedReel.userProfilePic || "",
-      facebookPage: ownerData.facebook_page,
-      igtvVideoCount: ownerData.igtv_video_count || 0,
-      postsCount: scrapedReel.userPostsCount || ownerData.media_count || 0,
-    };
-  }
-  // Add method to format Apify-specific data
-  private formatApifyReelData(
-    reelData: any,
-    originalUrl: string
-  ): ScrapedReelData {
+  private formatApifyReelData(reelData: ApifyReelResponse): ScrapedReelData {
     console.log("=== REEL DATA ANALYSIS ===");
     console.log("Available reel data keys:", Object.keys(reelData));
-    console.log("Owner data:", reelData.owner || "No owner data");
     console.log("Owner username:", reelData.ownerUsername);
     console.log("Owner followers:", reelData.ownerFollowersCount);
 
@@ -368,21 +200,22 @@ class InstagramScraper {
       comments: this.formatApifyComments(reelData.latestComments || []),
     };
   }
-  private formatApifyComments(commentsData: any[]): any[] {
-    return commentsData.slice(0, 20).map((comment: any, index: number) => ({
-      id: comment.id || index.toString(),
-      text: comment.text || "",
-      author: comment.ownerUsername || comment.owner?.username || "",
-      likes: comment.likesCount || 0,
-      timestamp: new Date(comment.timestamp || Date.now()),
-      replies: comment.repliesCount || 0,
+
+  private formatApifyComments(
+    commentsData: ApifyReelResponse["latestComments"]
+  ): ScrapedReelData["comments"] {
+    return (commentsData || []).slice(0, 20).map((comment, index) => ({
+      id: comment?.id || index.toString(),
+      text: comment?.text || "",
+      author: comment?.ownerUsername || comment?.owner?.username || "",
+      likes: comment?.likesCount || 0,
+      timestamp: new Date(comment?.timestamp || Date.now()),
+      replies: comment?.repliesCount || 0,
     }));
   }
 
-  // Fallback: Basic web scraping approach
   async scrapeBasic(url: string): Promise<ScrapedReelData> {
     try {
-      // Add user agent to avoid blocking
       const response = await axios.get(url, {
         headers: {
           "User-Agent":
@@ -392,9 +225,8 @@ class InstagramScraper {
 
       const $ = cheerio.load(response.data);
 
-      // Extract JSON data from script tags
-      let jsonData = null;
-      $("script").each((_, element) => {
+      let jsonData: InstagramSharedData | null = null;
+      $("script").each((_index, element) => {
         const content = $(element).html();
         if (content && content.includes("window._sharedData")) {
           try {
@@ -402,7 +234,7 @@ class InstagramScraper {
             if (match) {
               jsonData = JSON.parse(match[1]);
             }
-          } catch (e) {
+          } catch {
             // Continue searching
           }
         }
@@ -412,30 +244,27 @@ class InstagramScraper {
         throw new Error("Could not extract Instagram data");
       }
 
-      return this.parseInstagramData(jsonData, url);
+      return this.parseInstagramData(jsonData);
     } catch (error) {
       console.error("Basic scraping failed:", error);
       throw new Error("Failed to scrape Instagram data");
     }
   }
 
-  // Main scraping method with fallbacks
-  async scrapeReel(
-    url: string
-  ): Promise<{ reel: ScrapedReelData; profile: ScrapedProfileData }> {
+  // Main scraping method - simplified to return only reel data
+  async scrapeReel(url: string): Promise<ScrapedReelData> {
     const reelId = this.extractReelId(url);
     if (!reelId) {
       throw new Error("Invalid Instagram Reel URL");
     }
 
-    // Try methods in order of preference
     const methods = [
       { name: "Apify", fn: () => this.scrapeWithApify(url) },
       { name: "Basic", fn: () => this.scrapeBasic(url) },
     ];
 
-    let reelData: ScrapedReelData;
-    let lastError;
+    let reelData: ScrapedReelData | undefined;
+    let lastError: unknown;
 
     for (const method of methods) {
       try {
@@ -445,121 +274,84 @@ class InstagramScraper {
           console.log(`${method.name} scraping successful`);
           break;
         }
-      } catch (error: any) {
-        console.log(`${method.name} scraping failed:`, error.message);
+      } catch (error: unknown) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        console.log(`${method.name} scraping failed:`, errorMessage);
         lastError = error;
         continue;
       }
     }
 
-    if (!reelData!) {
+    if (!reelData) {
+      const errorMessage =
+        lastError instanceof Error ? lastError.message : "Unknown error";
       throw new Error(
-        `All scraping methods failed. Last error: ${lastError?.message}`
+        `All scraping methods failed. Last error: ${errorMessage}`
       );
     }
 
-    // Now scrape profile data
-    // Replace the profile scraping section in scrapeReel method:
-    // Now scrape profile data
-    console.log(`Scraping profile for user: ${reelData.username}`);
-    let profileData: ScrapedProfileData;
-
-    try {
-      profileData = await this.scrapeProfile(reelData.username);
-    } catch (error) {
-      console.log(
-        "Apify profile scraping failed, extracting from reel data..."
-      );
-      try {
-        // Try to extract profile data from the original reel scraping response
-        const originalReelData = reelData;
-        profileData = this.extractProfileFromReelData(
-          originalReelData,
-          reelData
-        );
-
-        // If still empty, try RapidAPI
-        // if (profileData.followersCount === 0 && this.rapidApiKey) {
-        //   console.log("Trying RapidAPI for profile data...");
-        //   profileData = await this.scrapeProfileWithRapidAPI(reelData.username);
-        // }
-      } catch (extractError) {
-        console.log(
-          "All profile scraping methods failed, using minimal fallback"
-        );
-        // Minimal fallback
-        profileData = {
-          id: "",
-          username: reelData.username,
-          fullName: reelData.username,
-          biography: "",
-          followersCount: reelData.userFollowers || 0,
-          followsCount: reelData.userFollowing || 0,
-          hasChannel: false,
-          highlightReelCount: 0,
-          isBusinessAccount: false,
-          joinedRecently: false,
-          private: false,
-          verified: false,
-          profilePicUrl: reelData.userProfilePic,
-          profilePicUrlHD: reelData.userProfilePic,
-          igtvVideoCount: 0,
-          postsCount: reelData.userPostsCount || 0,
-        };
-      }
-    }
-
-    return { reel: reelData, profile: profileData };
+    return reelData;
   }
 
-  private formatReelData(rawData: any): ScrapedReelData {
-    // This method needs to be adapted based on the API response structure
-    // Each API returns data in different formats
+  private formatReelData(rawData: unknown): ScrapedReelData {
+    // This method would need to be adapted based on RapidAPI response structure
+    // For now, returning a basic structure
+    const data = rawData as any;
 
     return {
-      reelId: rawData.shortcode || rawData.id || "",
-      username: rawData.owner?.username || rawData.username || "",
-      userProfilePic:
-        rawData.owner?.profile_pic_url || rawData.profilePicUrl || "",
-      userFollowers: rawData.owner?.edge_followed_by?.count,
-      userFollowing: rawData.owner?.edge_follow?.count,
+      reelId: data.shortcode || data.id || "",
+      username: data.owner?.username || data.username || "",
+      userProfilePic: data.owner?.profile_pic_url || data.profilePicUrl || "",
+      userFollowers: data.owner?.edge_followed_by?.count,
+      userFollowing: data.owner?.edge_follow?.count,
       caption:
-        rawData.edge_media_to_caption?.edges[0]?.node?.text ||
-        rawData.caption ||
+        data.edge_media_to_caption?.edges?.[0]?.node?.text ||
+        data.caption ||
         "",
-      viewCount: rawData.video_view_count || rawData.playCount || 0,
-      likesCount:
-        rawData.edge_media_preview_like?.count || rawData.likesCount || 0,
+      viewCount: data.video_view_count || data.playCount || 0,
+      likesCount: data.edge_media_preview_like?.count || data.likesCount || 0,
       commentsCount:
-        rawData.edge_media_to_comment?.count || rawData.commentsCount || 0,
-      sharesCount: 0, // Usually not available
-      duration: rawData.video_duration || rawData.videoDuration || 0,
+        data.edge_media_to_comment?.count || data.commentsCount || 0,
+      sharesCount: 0,
+      duration: data.video_duration || data.videoDuration || 0,
       postDate: new Date(
-        rawData.taken_at_timestamp * 1000 || rawData.timestamp || Date.now()
+        data.taken_at_timestamp
+          ? data.taken_at_timestamp * 1000
+          : data.timestamp
+          ? new Date(data.timestamp).getTime()
+          : Date.now()
       ),
-      thumbnailUrl: rawData.display_url || rawData.thumbnailUrl || "",
-      comments: this.formatComments(
-        rawData.edge_media_to_comment?.edges || rawData.comments || []
-      ),
+      thumbnailUrl: data.display_url || data.thumbnailUrl || "",
+      comments: this.formatComments(data.edge_media_to_comment?.edges || []),
     };
   }
 
-  private formatComments(commentsData: any[]): any[] {
-    return commentsData.slice(0, 20).map((comment: any, index: number) => ({
-      id: comment.node?.id || comment.id || index.toString(),
-      text: comment.node?.text || comment.text || "",
-      author: comment.node?.owner?.username || comment.username || "",
-      likes: comment.node?.edge_liked_by?.count || comment.likes || 0,
+  private formatComments(
+    commentsData: Array<{
+      node?: {
+        id?: string;
+        text?: string;
+        owner?: { username?: string };
+        edge_liked_by?: { count?: number };
+        created_at?: number;
+        edge_threaded_comments?: { count?: number };
+      };
+    }>
+  ): ScrapedReelData["comments"] {
+    return commentsData.slice(0, 20).map((comment, index) => ({
+      id: comment.node?.id || index.toString(),
+      text: comment.node?.text || "",
+      author: comment.node?.owner?.username || "",
+      likes: comment.node?.edge_liked_by?.count || 0,
       timestamp: new Date(
-        comment.node?.created_at * 1000 || comment.timestamp || Date.now()
+        comment.node?.created_at ? comment.node.created_at * 1000 : Date.now()
       ),
-      replies:
-        comment.node?.edge_threaded_comments?.count || comment.replies || 0,
+      replies: comment.node?.edge_threaded_comments?.count || 0,
     }));
   }
 
-  private parseInstagramData(sharedData: any, url: string): ScrapedReelData {
-    // Parse Instagram's _sharedData format
+  private parseInstagramData(sharedData: InstagramSharedData): ScrapedReelData {
     const postData =
       sharedData.entry_data?.PostPage?.[0]?.graphql?.shortcode_media;
 
@@ -567,7 +359,41 @@ class InstagramScraper {
       throw new Error("Could not find post data");
     }
 
-    return this.formatReelData(postData);
+    return {
+      reelId: postData.shortcode || postData.id || "",
+      username: postData.owner?.username || "",
+      userProfilePic: postData.owner?.profile_pic_url || "",
+      userFollowers: postData.owner?.edge_followed_by?.count,
+      userFollowing: postData.owner?.edge_follow?.count,
+      caption: postData.edge_media_to_caption?.edges?.[0]?.node?.text || "",
+      viewCount: postData.video_view_count || postData.playCount || 0,
+      likesCount: postData.edge_media_preview_like?.count || 0,
+      commentsCount: postData.edge_media_to_comment?.count || 0,
+      sharesCount: 0,
+      duration: postData.video_duration || postData.videoDuration || 0,
+      postDate: new Date(
+        postData.taken_at_timestamp
+          ? postData.taken_at_timestamp * 1000
+          : postData.timestamp
+          ? new Date(postData.timestamp).getTime()
+          : Date.now()
+      ),
+      thumbnailUrl: postData.display_url || postData.thumbnailUrl || "",
+      comments: this.formatComments(
+        postData.edge_media_to_comment?.edges || []
+      ),
+    };
+  }
+
+  // Helper method to extract basic profile info from reel data
+  extractBasicProfile(reelData: ScrapedReelData): BasicProfileData {
+    return {
+      username: reelData.username,
+      userProfilePic: reelData.userProfilePic,
+      userFollowers: reelData.userFollowers,
+      userFollowing: reelData.userFollowing,
+      userPostsCount: reelData.userPostsCount,
+    };
   }
 }
 

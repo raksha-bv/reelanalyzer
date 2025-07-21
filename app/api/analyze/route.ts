@@ -2,8 +2,62 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Reel from "@/models/Reels";
 import InstagramScraper from "@/lib/scraper";
-import GeminiSentimentAnalyzer from "@/lib/sentiment"; // Updated import
+import GeminiSentimentAnalyzer from "@/lib/sentiment";
 import { z } from "zod";
+
+// Define proper types instead of using 'any'
+interface ScrapedReelData {
+  reelId: string;
+  username: string;
+  userProfilePic: string;
+  userFollowers?: number;
+  userFollowing?: number;
+  userPostsCount?: number;
+  caption: string;
+  viewCount: number;
+  likesCount: number;
+  commentsCount: number;
+  sharesCount: number;
+  duration: number;
+  postDate: Date;
+  thumbnailUrl: string;
+  comments: Array<{
+    id: string;
+    text: string;
+    author: string;
+    likes: number;
+    timestamp: Date;
+    replies: number;
+  }>;
+}
+
+interface AnalysisData {
+  captionSentiment: {
+    positive: number;
+    negative: number;
+    neutral: number;
+    overall: string;
+    score: number;
+  };
+  commentsSentiment: {
+    positive: number;
+    negative: number;
+    neutral: number;
+    overall: string;
+    score: number;
+  };
+  processedComments: Array<{
+    id: string;
+    text: string;
+    author: string;
+    likes: number;
+    timestamp: Date;
+    replies: number;
+    sentiment: string;
+    isSpam: boolean;
+  }>;
+  category: string;
+}
 
 // Validation schema
 const analyzeSchema = z.object({
@@ -19,11 +73,49 @@ const analyzeSchema = z.object({
 
 interface AnalyzeResponse {
   success: boolean;
-  data?: {
-    reel: any;
-    profile: any;
-    analysis: any;
-  };
+  data?: ScrapedReelData &
+    AnalysisData & {
+      profileAnalysis?: {
+        influencerTier: string;
+        accountHealth: {
+          followRatio: number;
+          postsToFollowersRatio: number;
+          avgEngagementRate: number;
+        };
+        contentStrategy: {
+          isBusinessAccount: boolean;
+          isVerified: boolean;
+          hasExternalLink: boolean;
+          usesStories: boolean;
+          usesIGTV: boolean;
+          postingFrequency: string;
+          contentCategories: string[];
+        };
+        reelPerformance: {
+          viewToFollowerRatio: number;
+          likeToFollowerRatio: number;
+          commentToFollowerRatio: number;
+        };
+      };
+      engagementRate: number;
+      hashtags: Array<{ tag: string; count: number }>;
+      topComments: Array<{
+        text: string;
+        author: string;
+        likes: number;
+        sentiment: string;
+      }>;
+      spamCommentsCount: number;
+      wordCloud: Array<{ word: string; count: number }>;
+      viralityScore: number;
+      overallSentiment: {
+        positive: number;
+        negative: number;
+        neutral: number;
+        overall: string;
+        score: number;
+      };
+    };
   error?: string;
 }
 
@@ -45,7 +137,6 @@ export async function POST(
           (Date.now() - existingReel.lastUpdated.getTime()) / (1000 * 60 * 60);
 
         if (hoursSinceUpdate < 1) {
-          // Return cached data if updated within last hour
           console.log(
             "Returning cached data - last updated:",
             existingReel.lastUpdated
@@ -60,29 +151,73 @@ export async function POST(
 
     console.log("Proceeding with fresh scraping...");
 
-    // Initialize scraper and analyzer
     const scraper = new InstagramScraper();
     const analyzer = new GeminiSentimentAnalyzer();
 
     console.log("Starting scraping process...");
-    const scrapedResult = await scraper.scrapeReel(url);
-    // Add this after: const scrapedResult = await scraper.scrapeReel(url);
-    console.log("=== SCRAPING RESULTS ===");
-    console.log("Reel data keys:", Object.keys(scrapedResult.reel));
-    console.log("Profile data keys:", Object.keys(scrapedResult.profile));
-    console.log("Profile followers:", scrapedResult.profile.followersCount);
-    console.log("Profile verified:", scrapedResult.profile.verified);
-    const scrapedData = scrapedResult.reel;
-    const profileData = scrapedResult.profile;
+    // Updated to use the simplified scraper
+    const scrapedData = await scraper.scrapeReel(url);
 
+    console.log("=== SCRAPING RESULTS ===");
     console.log("Scraped reel data:", JSON.stringify(scrapedData, null, 2));
-    console.log("Scraped profile data:", JSON.stringify(profileData, null, 2));
     console.log("Number of comments scraped:", scrapedData.comments.length);
 
-    // Add profile analysis after existing analysis
-    const profileAnalysis = analyzeProfileData(profileData, scrapedData);
+    // Create basic profile analysis from reel data
+    function analyzeProfileFromReelData(reel: ScrapedReelData) {
+      const followersCount = reel.userFollowers || 0;
+      const followingCount = reel.userFollowing || 0;
+      const postsCount = reel.userPostsCount || 0;
 
-    // 🚀 SINGLE API CALL - This replaces ALL previous Gemini calls
+      const followerTiers = {
+        micro: followersCount < 10000,
+        macro: followersCount >= 10000 && followersCount < 100000,
+        mega: followersCount >= 100000 && followersCount < 1000000,
+        celebrity: followersCount >= 1000000,
+      };
+
+      type TierKey = keyof typeof followerTiers;
+      const influencerTier =
+        (Object.keys(followerTiers).find(
+          (key) => followerTiers[key as TierKey]
+        ) as TierKey) || "celebrity";
+
+      const accountHealth = {
+        followRatio: followingCount > 0 ? followersCount / followingCount : 0,
+        postsToFollowersRatio:
+          followersCount > 0 ? postsCount / followersCount : 0,
+        avgEngagementRate: 0, // Will be calculated below
+      };
+
+      const contentStrategy = {
+        isBusinessAccount: false, // Not available from reel data
+        isVerified: false, // Not available from reel data
+        hasExternalLink: false, // Not available from reel data
+        usesStories: false, // Not available from reel data
+        usesIGTV: false, // Not available from reel data
+        postingFrequency: "Unknown", // Not available from reel data
+        contentCategories: [] as string[], // Will be determined from analysis
+      };
+
+      const reelPerformance = {
+        viewToFollowerRatio:
+          followersCount > 0 ? reel.viewCount / followersCount : 0,
+        likeToFollowerRatio:
+          followersCount > 0 ? reel.likesCount / followersCount : 0,
+        commentToFollowerRatio:
+          followersCount > 0 ? reel.commentsCount / followersCount : 0,
+      };
+
+      return {
+        influencerTier,
+        accountHealth,
+        contentStrategy,
+        reelPerformance,
+      };
+    }
+
+    const profileAnalysis = analyzeProfileFromReelData(scrapedData);
+
+    // Single API call for comprehensive analysis
     console.log("Starting comprehensive analysis with single API call...");
     const analysisResult = await analyzer.analyzeComplete(
       scrapedData.caption,
@@ -145,107 +280,37 @@ export async function POST(
 
     // Count spam comments
     const spamCommentsCount = processedComments.filter((c) => c.isSpam).length;
-    function analyzeProfileData(profile: any, reel: any) {
-      const followerTiers = {
-        micro: profile.followersCount < 10000,
-        macro:
-          profile.followersCount >= 10000 && profile.followersCount < 100000,
-        mega:
-          profile.followersCount >= 100000 && profile.followersCount < 1000000,
-        celebrity: profile.followersCount >= 1000000,
-      };
 
-      type TierKey = keyof typeof followerTiers;
-      const influencerTier =
-        (Object.keys(followerTiers).find(
-          (key) => followerTiers[key as TierKey]
-        ) as TierKey) || "celebrity";
+    // Update profile analysis with calculated engagement rate
+    profileAnalysis.accountHealth.avgEngagementRate = engagementRate;
+    profileAnalysis.contentStrategy.contentCategories = [category];
 
-      const accountHealth = {
-        followRatio:
-          profile.followsCount > 0
-            ? profile.followersCount / profile.followsCount
-            : 0,
-        postsToFollowersRatio:
-          profile.followersCount > 0
-            ? profile.postsCount / profile.followersCount
-            : 0,
-        avgEngagementRate: profile.engagementRate || 0,
-      };
-
-      const contentStrategy = {
-        isBusinessAccount: profile.isBusinessAccount,
-        isVerified: profile.verified,
-        hasExternalLink: !!profile.externalUrl,
-        usesStories: profile.highlightReelCount > 0,
-        usesIGTV: profile.igtvVideoCount > 0,
-        postingFrequency: profile.postingFrequency || "Unknown",
-        contentCategories: profile.contentCategories || [],
-      };
-
-      const reelPerformance = {
-        viewToFollowerRatio:
-          profile.followersCount > 0
-            ? reel.viewCount / profile.followersCount
-            : 0,
-        likeToFollowerRatio:
-          profile.followersCount > 0
-            ? reel.likesCount / profile.followersCount
-            : 0,
-        commentToFollowerRatio:
-          profile.followersCount > 0
-            ? reel.commentsCount / profile.followersCount
-            : 0,
-      };
-
-      return {
-        influencerTier,
-        accountHealth,
-        contentStrategy,
-        reelPerformance,
-      };
-    }
-    // Prepare reel data
-    const reelData = {
-      url,
-      reelId: scrapedData.reelId,
-      username: scrapedData.username,
-      userProfilePic: scrapedData.userProfilePic,
-      userFollowers: scrapedData.userFollowers,
-      userFollowing: scrapedData.userFollowing,
-      userPostsCount: scrapedData.userPostsCount,
-
-      // Add profile data
-      profileData,
+    // Prepare final data
+    const finalData = {
+      ...scrapedData,
       profileAnalysis,
-
-      caption: scrapedData.caption,
-      viewCount: scrapedData.viewCount,
-      likesCount: scrapedData.likesCount,
-      commentsCount: scrapedData.commentsCount,
-      sharesCount: scrapedData.sharesCount,
-      duration: scrapedData.duration,
-      postDate: scrapedData.postDate,
-      thumbnailUrl: scrapedData.thumbnailUrl,
-      engagementRate,
-      comments: processedComments,
-      hashtags,
       captionSentiment,
       commentsSentiment,
       overallSentiment,
+      processedComments,
+      category,
+      engagementRate,
+      viralityScore,
+      hashtags,
       topComments,
       spamCommentsCount,
       wordCloud,
-      category,
-      viralityScore,
       lastUpdated: new Date(),
     };
 
-    console.log("Final reel data comments:", reelData.comments.length);
-    console.log("Sample comment structure:", reelData.comments[0]);
+    console.log(
+      "Final reel data comments:",
+      finalData.processedComments.length
+    );
+    console.log("Sample comment structure:", finalData.processedComments[0]);
 
     // Save or update in database
-    const savedReel = await Reel.findOneAndUpdate({ url }, reelData, {
+    const savedReel = await Reel.findOneAndUpdate({ url }, finalData, {
       upsert: true,
       new: true,
     });
@@ -254,13 +319,16 @@ export async function POST(
       success: true,
       data: savedReel,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Analysis error:", error);
+
+    const errorMessage =
+      error instanceof Error ? error.message : "Failed to analyze reel";
 
     return NextResponse.json(
       {
         success: false,
-        error: error.message || "Failed to analyze reel",
+        error: errorMessage,
       },
       { status: 500 }
     );
