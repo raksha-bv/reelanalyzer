@@ -73,7 +73,23 @@ export interface ISentimentAnalysis {
   overall: "positive" | "negative" | "neutral";
   score: number;
 }
-
+export interface IStrategicInsights {
+  contentStrategy?: {
+    strengths: string[];
+    opportunities: string[];
+    recommendations: string[];
+  };
+  audienceInsights?: {
+    demographics: Record<string, number>;
+    engagementPatterns: string[];
+    behaviorInsights: string[];
+  };
+  performanceAnalysis?: {
+    viralPotential: string;
+    contentOptimization: string[];
+    timingRecommendations: string[];
+  };
+}
 export interface IReel extends Document {
   url: string;
   reelId: string;
@@ -109,6 +125,7 @@ export interface IReel extends Document {
   wordCloud: { word: string; count: number }[];
   category?: string;
   viralityScore?: number;
+  strategicInsights?: IStrategicInsights; // Add this line
 
   // Metadata
   lastUpdated: Date;
@@ -116,7 +133,26 @@ export interface IReel extends Document {
   profileData?: IProfileData;
   profileAnalysis?: IProfileAnalysis;
 }
-
+const StrategicInsightsSchema = new Schema(
+  {
+    contentStrategy: {
+      strengths: [String],
+      opportunities: [String],
+      recommendations: [String],
+    },
+    audienceInsights: {
+      demographics: { type: Map, of: Number },
+      engagementPatterns: [String],
+      behaviorInsights: [String],
+    },
+    performanceAnalysis: {
+      viralPotential: String,
+      contentOptimization: [String],
+      timingRecommendations: [String],
+    },
+  },
+  { _id: false }
+);
 const commentSchema = new mongoose.Schema(
   {
     id: String,
@@ -230,6 +266,7 @@ const ReelSchema = new Schema<IReel>({
   overallSentiment: { type: SentimentSchema },
   profileData: { type: ProfileDataSchema },
   profileAnalysis: { type: ProfileAnalysisSchema },
+  strategicInsights: { type: StrategicInsightsSchema }, // Add this line
 
   topComments: [commentSchema],
   spamCommentsCount: { type: Number, default: 0 },
@@ -240,6 +277,7 @@ const ReelSchema = new Schema<IReel>({
   lastUpdated: { type: Date, default: Date.now },
   createdAt: { type: Date, default: Date.now },
 });
+
 export type IReelLean = Omit<IReel, keyof Document> & {
   _id: string;
   __v?: number;

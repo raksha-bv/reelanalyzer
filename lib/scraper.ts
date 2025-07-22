@@ -16,6 +16,21 @@ export interface ScrapedReelData {
   duration: number;
   postDate: Date;
   thumbnailUrl: string;
+
+  // New fields to add:
+  isSponsored?: boolean;
+  musicInfo?: {
+    artist_name: string;
+    song_name: string;
+    uses_original_audio: boolean;
+    audio_id: string;
+  };
+  hashtags?: string[];
+  mentions?: string[];
+  videoUrl?: string;
+  isCommentsDisabled?: boolean;
+  ownerFullName?: string;
+
   comments: Array<{
     id: string;
     text: string;
@@ -61,6 +76,18 @@ interface ApifyReelResponse {
     timestamp?: string;
     repliesCount?: number;
   }>;
+  isSponsored?: boolean;
+  musicInfo?: {
+    artist_name?: string;
+    song_name?: string;
+    uses_original_audio?: boolean;
+    audio_id?: string;
+  };
+  hashtags?: string[];
+  mentions?: string[];
+  videoUrl?: string;
+  isCommentsDisabled?: boolean;
+  ownerFullName?: string;
 }
 
 interface InstagramSharedData {
@@ -234,7 +261,7 @@ class InstagramScraper {
       userFollowing: reelData.ownerFollowingCount,
       userPostsCount: reelData.ownerPostsCount,
       caption: reelData.caption || "",
-      viewCount: reelData.videoViewCount || reelData.videoPlayCount || 0,
+      viewCount: reelData.videoPlayCount || 0,
       likesCount: reelData.likesCount || 0,
       commentsCount: reelData.commentsCount || 0,
       sharesCount: 0,
@@ -242,6 +269,21 @@ class InstagramScraper {
       postDate: new Date(reelData.timestamp || Date.now()),
       thumbnailUrl: reelData.displayUrl || reelData.images?.[0] || "",
       comments: this.formatApifyComments(reelData.latestComments || []),
+      isSponsored: reelData.isSponsored || false,
+      musicInfo: reelData.musicInfo
+        ? {
+            artist_name: reelData.musicInfo.artist_name || "",
+            song_name: reelData.musicInfo.song_name || "",
+            uses_original_audio:
+              reelData.musicInfo.uses_original_audio || false,
+            audio_id: reelData.musicInfo.audio_id || "",
+          }
+        : undefined,
+      hashtags: reelData.hashtags || [],
+      mentions: reelData.mentions || [],
+      videoUrl: reelData.videoUrl,
+      isCommentsDisabled: reelData.isCommentsDisabled || false,
+      ownerFullName: reelData.ownerFullName,
     };
   }
 

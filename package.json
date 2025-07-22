@@ -30,6 +30,7 @@
     "puppeteer-core": "^21.5.2",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "recharts": "^3.1.0",
     "sentiment": "^5.0.2",
     "tailwindcss": "^4",
     "typescript": "^5",

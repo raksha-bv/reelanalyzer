@@ -4,6 +4,7 @@ import Reel from "@/models/Reels";
 import InstagramScraper from "@/lib/scraper";
 import GeminiSentimentAnalyzer from "@/lib/sentiment";
 import { z } from "zod";
+import StrategicInsights from "@/lib/sentiment";
 
 // Define proper types instead of using 'any'
 interface ScrapedReelData {
@@ -82,6 +83,7 @@ interface AnalyzeResponse {
           postsToFollowersRatio: number;
           avgEngagementRate: number;
         };
+        strategicInsights?: StrategicInsights;
         contentStrategy: {
           isBusinessAccount: boolean;
           isVerified: boolean;
@@ -154,13 +156,20 @@ export async function POST(
     const scraper = new InstagramScraper();
     const analyzer = new GeminiSentimentAnalyzer();
 
-    console.log("Starting scraping process...");
-    // Updated to use the simplified scraper
     const scrapedData = await scraper.scrapeReel(url);
+    const profileAnalysis = analyzeProfileFromReelData(scrapedData);
 
-    console.log("=== SCRAPING RESULTS ===");
-    console.log("Scraped reel data:", JSON.stringify(scrapedData, null, 2));
-    console.log("Number of comments scraped:", scrapedData.comments.length);
+    // SINGLE API CALL - combines sentiment analysis and strategic insights
+    console.log("Starting comprehensive analysis with single API call...");
+    const analysisResult = await analyzer.analyzeCompleteWithInsights(
+      scrapedData,
+      scrapedData.caption,
+      scrapedData.comments
+    );
+    console.log("Complete analysis finished");
+
+    // Extract results from single analysis
+    const { strategicInsights, ...restAnalysis } = analysisResult;
 
     // Create basic profile analysis from reel data
     function analyzeProfileFromReelData(reel: ScrapedReelData) {
@@ -215,15 +224,15 @@ export async function POST(
       };
     }
 
-    const profileAnalysis = analyzeProfileFromReelData(scrapedData);
+    // const profileAnalysis = analyzeProfileFromReelData(scrapedData);
 
-    // Single API call for comprehensive analysis
-    console.log("Starting comprehensive analysis with single API call...");
-    const analysisResult = await analyzer.analyzeComplete(
-      scrapedData.caption,
-      scrapedData.comments
-    );
-    console.log("Complete analysis finished");
+    // // Single API call for comprehensive analysis
+    // console.log("Starting comprehensive analysis with single API call...");
+    // const analysisResult = await analyzer.analyzeComplete(
+    //   scrapedData.caption,
+    //   scrapedData.comments
+    // );
+    // console.log("Complete analysis finished");
 
     // Extract results from single analysis
     const captionSentiment = analysisResult.captionSentiment;
@@ -286,38 +295,81 @@ export async function POST(
     profileAnalysis.contentStrategy.contentCategories = [category];
 
     // Prepare final data
+    console.log("Generating strategic insights...");
+    console.log(strategicInsights);
+    // const strategicInsights = await analyzer.generateStrategicInsights(
+    //   scrapedData,
+    //   analysisResult
+    // );
+    console.log("Strategic insights generated");
     const finalData = {
       ...scrapedData,
-      profileAnalysis,
-      captionSentiment,
-      commentsSentiment,
-      overallSentiment,
-      processedComments,
-      category,
+      profileAnalysis: {
+        ...profileAnalysis,
+        strategicInsights, // Make sure this is included at the profile level too
+      },
+      ...restAnalysis,
       engagementRate,
       viralityScore,
       hashtags,
       topComments,
       spamCommentsCount,
       wordCloud,
+      strategicInsights, // This should be at the root level for frontend access
       lastUpdated: new Date(),
+      contentStrategy: strategicInsights?.contentStrategy || {
+        strengths: ["High engagement rate", "Positive audience response"],
+        opportunities: ["Optimize posting timing", "Increase content variety"],
+      },
+      audienceInsights: strategicInsights?.audienceInsights || {
+        demographics: { "18-24": 30, "25-34": 40, "35-44": 20, "45+": 10 },
+        engagementPatterns: [
+          "High engagement in evenings",
+          "Peak activity on weekends",
+        ],
+      },
+      performanceAnalysis: strategicInsights?.performanceAnalysis,
+      overallSentiment,
     };
-
     console.log(
-      "Final reel data comments:",
-      finalData.processedComments.length
+      "Final data being saved:",
+      JSON.stringify(
+        {
+          strategicInsights: finalData.strategicInsights,
+          contentStrategy: finalData.contentStrategy,
+          audienceInsights: finalData.audienceInsights,
+        },
+        null,
+        2
+      )
     );
-    console.log("Sample comment structure:", finalData.processedComments[0]);
 
-    // Save or update in database
     const savedReel = await Reel.findOneAndUpdate({ url }, finalData, {
       upsert: true,
       new: true,
     });
+    console.log("Saved reel strategicInsights:", savedReel.strategicInsights);
+
+    console.log("About to return data with strategicInsights:");
+    console.log(
+      "savedReel.strategicInsights:",
+      JSON.stringify(savedReel.strategicInsights, null, 2)
+    );
+    console.log(
+      "Full response data keys:",
+      Object.keys(savedReel.toObject ? savedReel.toObject() : savedReel)
+    );
+
+    // Check if it's a Mongoose document and convert properly
+    const responseData = savedReel.toObject ? savedReel.toObject() : savedReel;
+    console.log(
+      "Response data strategicInsights:",
+      responseData.strategicInsights
+    );
 
     return NextResponse.json({
       success: true,
-      data: savedReel,
+      data: responseData,
     });
   } catch (error: unknown) {
     console.error("Analysis error:", error);

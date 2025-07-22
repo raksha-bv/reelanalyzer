@@ -7,7 +7,6 @@ import {
   Heart,
   Share2,
   Eye,
-  Clock,
   User,
   Hash,
   Zap,
@@ -20,6 +19,7 @@ import {
   ArrowDownRight,
   Plus,
 } from "lucide-react";
+import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 
 type Sentiment = {
   positive: number;
@@ -27,6 +27,24 @@ type Sentiment = {
   neutral: number;
   overall: string;
   score: number;
+};
+
+type StrategicInsights = {
+  contentStrategy?: {
+    strengths: string[];
+    opportunities: string[];
+    recommendations: string[];
+  };
+  audienceInsights?: {
+    demographics: Record<string, number>;
+    engagementPatterns: string[];
+    behaviorInsights: string[];
+  };
+  performanceAnalysis?: {
+    viralPotential: string;
+    contentOptimization: string[];
+    timingRecommendations: string[];
+  };
 };
 
 type Comment = {
@@ -66,6 +84,15 @@ type ReelData = {
   wordCloud: WordCloudItem[];
   hashtags: HashtagItem[];
   spamCommentsCount: number;
+  contentStrategy?: {
+    strengths: string[];
+    opportunities: string[];
+  };
+  audienceInsights?: {
+    demographics: Record<string, number>;
+    engagementPatterns: string[];
+  };
+  strategicInsights?: StrategicInsights;
 };
 
 const ReelAnalyzer = () => {
@@ -75,6 +102,9 @@ const ReelAnalyzer = () => {
 
   const validateReelData = (data: unknown): ReelData => {
     const safeData = data as Record<string, unknown>;
+
+    console.log("Raw data received in validateReelData:", safeData);
+    console.log("strategicInsights in raw data:", safeData.strategicInsights);
 
     return {
       username: (safeData.username as string) || "unknown",
@@ -114,6 +144,41 @@ const ReelAnalyzer = () => {
       wordCloud: (safeData.wordCloud as WordCloudItem[]) || [],
       hashtags: (safeData.hashtags as HashtagItem[]) || [],
       spamCommentsCount: (safeData.spamCommentsCount as number) || 0,
+      strategicInsights: (() => {
+        const insights = safeData.strategicInsights as StrategicInsights;
+        console.log("Raw strategicInsights:", safeData.strategicInsights);
+        console.log(
+          "Type of strategicInsights:",
+          typeof safeData.strategicInsights
+        );
+        console.log("Processed strategicInsights:", insights);
+
+        if (insights && typeof insights === "object") {
+          return {
+            contentStrategy: insights.contentStrategy
+              ? {
+                  strengths: Array.isArray(insights.contentStrategy.strengths)
+                    ? insights.contentStrategy.strengths
+                    : [],
+                  opportunities: Array.isArray(
+                    insights.contentStrategy.opportunities
+                  )
+                    ? insights.contentStrategy.opportunities
+                    : [],
+                  recommendations: Array.isArray(
+                    insights.contentStrategy.recommendations
+                  )
+                    ? insights.contentStrategy.recommendations
+                    : [],
+                }
+              : undefined,
+            audienceInsights: insights.audienceInsights,
+            performanceAnalysis: insights.performanceAnalysis,
+          };
+        }
+
+        return undefined;
+      })(),
     };
   };
 
@@ -139,9 +204,29 @@ const ReelAnalyzer = () => {
       }
 
       const result = await response.json();
+      console.log("API response:", result);
+
+      console.log("result.data:", result.data);
+      console.log(
+        "result.data.strategicInsights:",
+        result.data?.strategicInsights
+      );
+      console.log("Raw JSON:", JSON.stringify(result.data, null, 2));
 
       if (result.success && result.data) {
+        console.log("API response data:", result.data);
+        console.log(
+          "strategicInsights in response:",
+          result.data.strategicInsights
+        );
+
         const validatedData = validateReelData(result.data);
+        console.log("Final validated data:", validatedData);
+        console.log(
+          "Final strategicInsights:",
+          validatedData.strategicInsights
+        );
+
         setData(validatedData);
       } else {
         throw new Error("Invalid response structure");
@@ -174,10 +259,9 @@ const ReelAnalyzer = () => {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-8">
+      <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
+        <div className="max-w-4xl mx-auto w-full">
+          <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-white rounded-2xl shadow-sm border border-gray-100 flex items-center justify-center">
                 <BarChart3 className="w-6 h-6 text-orange-500" />
@@ -186,26 +270,16 @@ const ReelAnalyzer = () => {
                 <h1 className="text-2xl font-bold text-gray-900">
                   Reel Analytics
                 </h1>
-                <p className="text-gray-500">Instagram Performance Dashboard</p>
+                <p className="text-gray-500 text-base">
+                  Instagram Performance Dashboard
+                </p>
               </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <button className="px-4 py-2 text-gray-600 hover:text-gray-900 font-medium">
-                Analytics
-              </button>
-              <button className="px-4 py-2 text-gray-600 hover:text-gray-900 font-medium">
-                Reports
-              </button>
-              <button className="px-4 py-2 text-gray-600 hover:text-gray-900 font-medium">
-                Settings
-              </button>
             </div>
           </div>
 
-          {/* Welcome Section */}
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-2 bg-orange-50 text-orange-600 px-4 py-2 rounded-full text-sm font-medium mb-6">
-              <Sparkles className="w-4 h-4" />
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center gap-2 bg-orange-50 text-orange-600 px-6 py-3 rounded-full text-base font-medium mb-4">
+              <Sparkles className="w-5 h-5" />
               Hey, Need help? 👋
             </div>
             <h2 className="text-4xl font-bold text-gray-900 mb-4">
@@ -216,33 +290,30 @@ const ReelAnalyzer = () => {
             </p>
           </div>
 
-          {/* Search Section */}
-          <div className="max-w-3xl mx-auto">
-            <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-8">
-              <div className="flex gap-4">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Paste Instagram Reel URL here..."
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    className="w-full pl-12 pr-6 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all text-lg"
-                  />
-                </div>
-                <button
-                  onClick={handleAnalyze}
-                  disabled={loading || !url}
-                  className="bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white font-semibold px-8 py-4 rounded-2xl transition-all duration-200 flex items-center gap-3 shadow-lg hover:shadow-xl"
-                >
-                  {loading ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <ArrowUpRight className="w-5 h-5" />
-                  )}
-                  {loading ? "Analyzing..." : "Analyze"}
-                </button>
+          <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-8">
+            <div className="flex gap-6">
+              <div className="flex-1 relative">
+                <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 w-6 h-6 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Paste Instagram Reel URL here..."
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  className="w-full pl-14 pr-8 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all text-lg"
+                />
               </div>
+              <button
+                onClick={handleAnalyze}
+                disabled={loading || !url}
+                className="bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white font-semibold px-8 py-4 rounded-2xl transition-all duration-200 flex items-center gap-3 shadow-lg hover:shadow-xl text-lg"
+              >
+                {loading ? (
+                  <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <ArrowUpRight className="w-6 h-6" />
+                )}
+                {loading ? "Analyzing..." : "Analyze"}
+              </button>
             </div>
           </div>
         </div>
@@ -250,102 +321,120 @@ const ReelAnalyzer = () => {
     );
   }
 
+  const sentimentData = [
+    {
+      name: "Positive",
+      value: data.overallSentiment.positive,
+      fill: "#f97316",
+    },
+    {
+      name: "Negative",
+      value: data.overallSentiment.negative,
+      fill: "#9ca3af",
+    },
+    { name: "Neutral", value: data.overallSentiment.neutral, fill: "#e5e7eb" },
+  ];
+
+  const topThreeComments = data.topComments
+    .sort((a, b) => b.likes - a.likes)
+    .slice(0, 3);
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-[1800px] mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-white rounded-2xl shadow-sm border border-gray-100 flex items-center justify-center">
+            <div className="w-12 h-12 bg-white rounded-xl shadow-sm border border-gray-100 flex items-center justify-center">
               <BarChart3 className="w-6 h-6 text-orange-500" />
             </div>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
                 Reel Analytics
               </h1>
-              <p className="text-gray-500">Dashboard</p>
+              <p className="text-gray-500 text-base">Dashboard</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <button
               onClick={() => setData(null)}
-              className="px-4 py-2 text-gray-600 hover:text-gray-900 font-medium flex items-center gap-2"
+              className="px-4 py-2 text-gray-600 hover:text-gray-900 font-medium flex items-center gap-2 text-base"
             >
               <Plus className="w-4 h-4" />
               New Analysis
             </button>
-            <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-              <User className="w-5 h-5 text-orange-600" />
+            <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
+              <User className="w-6 h-6 text-orange-600" />
             </div>
           </div>
         </div>
 
-        {/* Main Dashboard Grid */}
+        {/* Main Content Grid */}
         <div className="grid grid-cols-12 gap-6">
-          {/* Date and User Info */}
-          <div className="col-span-3">
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 mb-6">
-              <div className="flex items-center gap-3 mb-4">
-                <Calendar className="w-5 h-5 text-orange-500" />
+          {/* Left Column - User Info & Quick Stats */}
+          <div className="col-span-2 space-y-4">
+            {/* User Info */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Calendar className="w-4 h-4 text-orange-500" />
                 <span className="text-sm text-gray-500">Posted</span>
               </div>
-              <div className="text-3xl font-bold text-gray-900 mb-1">
+              <div className="text-2xl font-bold text-gray-900">
                 {formatDate(data.postDate).split(" ")[0] ||
                   new Date().getDate()}
               </div>
-              <div className="text-gray-500 text-sm capitalize">
+              <div className="text-gray-500 text-sm">
                 {data.category}, {data.duration}s
               </div>
-              <div className="mt-4 p-3 bg-orange-50 rounded-xl">
-                <div className="text-sm text-orange-600 font-medium">
+              <div className="mt-3 p-3 bg-orange-50 rounded-lg">
+                <div className="text-sm text-orange-600 font-medium truncate">
                   @{data.username}
                 </div>
               </div>
             </div>
 
-            {/* Quick Stats */}
-            <div className="space-y-4">
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <Eye className="w-5 h-5 text-gray-400" />
-                  <ArrowUpRight className="w-4 h-4 text-green-500" />
-                </div>
-                <div className="text-2xl font-bold text-gray-900 mb-1">
-                  {formatNumber(data.viewCount)}
-                </div>
-                <div className="text-gray-500 text-sm">Total views</div>
+            {/* Views */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <Eye className="w-5 h-5 text-gray-400" />
+                <ArrowUpRight className="w-4 h-4 text-green-500" />
               </div>
+              <div className="text-2xl font-bold text-gray-900">
+                {formatNumber(data.viewCount)}
+              </div>
+              <div className="text-gray-500 text-sm">Views</div>
+            </div>
 
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <TrendingUp className="w-5 h-5 text-orange-500" />
-                  <span className="text-xs bg-orange-50 text-orange-600 px-2 py-1 rounded-full">
-                    2023
-                  </span>
-                </div>
-                <div className="text-2xl font-bold text-gray-900 mb-1">
-                  {data.engagementRate.toFixed(1)}%
-                </div>
-                <div className="text-gray-500 text-sm">Engagement rate</div>
+            {/* Engagement Rate */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <TrendingUp className="w-5 h-5 text-orange-500" />
+                <span className="text-xs bg-orange-50 text-orange-600 px-2 py-1 rounded-full">
+                  Rate
+                </span>
               </div>
+              <div className="text-2xl font-bold text-gray-900">
+                {data.engagementRate.toFixed(1)}%
+              </div>
+              <div className="text-gray-500 text-sm">Engagement</div>
             </div>
           </div>
 
-          {/* Main Metrics */}
-          <div className="col-span-6">
-            {/* Performance Overview */}
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 mb-6">
-              <div className="flex items-center justify-between mb-6">
+          {/* Center Column - Main Metrics & Performance */}
+          <div className="col-span-7 space-y-4">
+            {/* Performance Metrics Grid - Compact */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+              <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-gray-900">
                   Performance Overview
                 </h3>
-                <div className="flex items-center gap-2 text-sm text-gray-500">
+                <div className="flex items-center gap-1 text-sm text-gray-500">
                   <Filter className="w-4 h-4" />
                   <span>Weekly</span>
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 gap-4 mb-8">
+              <div className="grid grid-cols-4 gap-4">
                 {[
                   {
                     icon: Heart,
@@ -376,9 +465,9 @@ const ReelAnalyzer = () => {
                     positive: true,
                   },
                 ].map((metric, index) => (
-                  <div key={index} className="p-4 bg-gray-50 rounded-2xl">
+                  <div key={index} className="p-3 bg-gray-50 rounded-xl">
                     <div className="flex items-center justify-between mb-2">
-                      <metric.icon className="w-5 h-5 text-gray-400" />
+                      <metric.icon className="w-4 h-4 text-gray-400" />
                       <div
                         className={`flex items-center gap-1 text-xs ${
                           metric.positive ? "text-green-600" : "text-red-600"
@@ -392,26 +481,31 @@ const ReelAnalyzer = () => {
                         {metric.change}
                       </div>
                     </div>
-                    <div className="text-xl font-bold text-gray-900 mb-1">
+                    <div className="text-lg font-bold text-gray-900">
                       {metric.value}
                     </div>
-                    <div className="text-gray-500 text-xs">{metric.label}</div>
+                    <div className="text-gray-500 text-sm">{metric.label}</div>
                   </div>
                 ))}
               </div>
+            </div>
 
-              {/* Sentiment Analysis */}
-              <div className="space-y-6">
+            {/* Sentiment Analysis - Compact */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">
+                Sentiment Analysis
+              </h3>
+              <div className="space-y-3">
                 <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="font-semibold text-gray-900">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-semibold text-gray-900">
                       Caption Sentiment
                     </span>
                     <span className="text-sm font-bold text-orange-600 capitalize">
                       {data.captionSentiment.overall}
                     </span>
                   </div>
-                  <div className="bg-gray-100 rounded-full h-2 overflow-hidden mb-2">
+                  <div className="bg-gray-100 rounded-full h-2 overflow-hidden">
                     <div className="flex h-full">
                       <div
                         className="bg-orange-500"
@@ -427,23 +521,18 @@ const ReelAnalyzer = () => {
                       ></div>
                     </div>
                   </div>
-                  <div className="flex justify-between text-xs text-gray-500">
-                    <span>Positive {data.captionSentiment.positive}%</span>
-                    <span>Negative {data.captionSentiment.negative}%</span>
-                    <span>Neutral {data.captionSentiment.neutral}%</span>
-                  </div>
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="font-semibold text-gray-900">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-semibold text-gray-900">
                       Comments Sentiment
                     </span>
                     <span className="text-sm font-bold text-orange-600 capitalize">
                       {data.commentsSentiment.overall}
                     </span>
                   </div>
-                  <div className="bg-gray-100 rounded-full h-2 overflow-hidden mb-2">
+                  <div className="bg-gray-100 rounded-full h-2 overflow-hidden">
                     <div className="flex h-full">
                       <div
                         className="bg-orange-500"
@@ -459,146 +548,185 @@ const ReelAnalyzer = () => {
                       ></div>
                     </div>
                   </div>
-                  <div className="flex justify-between text-xs text-gray-500">
-                    <span>Positive {data.commentsSentiment.positive}%</span>
-                    <span>Negative {data.commentsSentiment.negative}%</span>
-                    <span>Neutral {data.commentsSentiment.neutral}%</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column */}
-          <div className="col-span-3 space-y-6">
-            {/* Engagement Rate Circle */}
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
-              <div className="text-center">
-                <div className="relative w-24 h-24 mx-auto mb-4">
-                  <svg
-                    className="w-24 h-24 transform -rotate-90"
-                    viewBox="0 0 36 36"
-                  >
-                    <path
-                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                      fill="none"
-                      stroke="#f3f4f6"
-                      strokeWidth="2"
-                    />
-                    <path
-                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                      fill="none"
-                      stroke="#f97316"
-                      strokeWidth="2"
-                      strokeDasharray={`${data.engagementRate}, 100`}
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-lg font-bold text-gray-900">
-                      {data.engagementRate.toFixed(0)}%
-                    </span>
-                  </div>
-                </div>
-                <div className="text-sm text-gray-500">Engagement rate</div>
-                <div className="text-xs text-green-600 mt-1">
-                  +2.3% from last week
                 </div>
               </div>
             </div>
 
-            {/* Popular Words */}
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <Hash className="w-5 h-5 text-orange-500" />
-                <h3 className="font-bold text-gray-900">Popular Words</h3>
-              </div>
-              <div className="space-y-3">
-                {data.wordCloud.slice(0, 5).map((word, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                      <span className="font-medium text-gray-900">
-                        {word.word}
-                      </span>
-                    </div>
-                    <span className="text-gray-500 text-sm">{word.count}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Key Insights */}
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <Sparkles className="w-5 h-5 text-orange-500" />
-                <h3 className="font-bold text-gray-900">Key Insights</h3>
-              </div>
-              <div className="space-y-4">
-                <div className="p-4 bg-orange-50 rounded-2xl">
-                  <div className="flex items-center gap-2 mb-2">
-                    <CheckCircle className="w-4 h-4 text-orange-600" />
-                    <span className="font-semibold text-gray-900 text-sm">
-                      High Performance
-                    </span>
-                  </div>
-                  <p className="text-gray-600 text-xs">
-                    Your content shows excellent engagement with positive
-                    audience sentiment
-                  </p>
-                </div>
-
-                <div className="p-4 bg-gray-50 rounded-2xl">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Clock className="w-4 h-4 text-gray-600" />
-                    <span className="font-semibold text-gray-900 text-sm">
-                      Optimal Timing
-                    </span>
-                  </div>
-                  <p className="text-gray-600 text-xs">
-                    Posted during peak engagement hours for your audience
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom Section - Comments */}
-          <div className="col-span-12">
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
-              <div className="flex items-center justify-between mb-6">
+            {/* Top Comments */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+              <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-gray-900">
-                  Top Comments
+                  Top 3 Comments (by likes)
                 </h3>
                 <div className="text-sm text-gray-500">
-                  Showing {data.topComments.length} of {data.commentsCount}
+                  Showing 3 of {data.commentsCount}
                 </div>
               </div>
-
               <div className="grid grid-cols-3 gap-4">
-                {data.topComments.map((comment, index) => (
-                  <div key={index} className="p-4 bg-gray-50 rounded-2xl">
-                    <div className="flex items-center justify-between mb-3">
+                {topThreeComments.map((comment, index) => (
+                  <div key={index} className="p-3 bg-gray-50 rounded-xl">
+                    <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                          <User className="w-4 h-4 text-orange-600" />
+                        <div className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center">
+                          <User className="w-3 h-3 text-orange-600" />
                         </div>
-                        <span className="font-semibold text-gray-900 text-sm">
+                        <span className="font-semibold text-gray-900 text-xs truncate">
                           @{comment.author}
                         </span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <Heart className="w-4 h-4 text-orange-500" />
+                        <Heart className="w-3 h-3 text-orange-500" />
                         <span className="text-xs text-gray-500">
                           {comment.likes}
                         </span>
                       </div>
                     </div>
-                    <p className="text-gray-700 text-sm leading-relaxed">
+                    <p className="text-gray-700 text-sm leading-relaxed line-clamp-2">
                       {comment.text}
                     </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column */}
+          <div className="col-span-3 space-y-4">
+            {/* Pie Chart for Sentiment */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+              <h3 className="text-sm font-bold text-gray-900 mb-3">
+                Overall Sentiment
+              </h3>
+              <div className="h-32 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={sentimentData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={30}
+                      outerRadius={50}
+                      dataKey="value"
+                    >
+                      {sentimentData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex justify-center gap-4 text-sm">
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                  <span className="text-gray-600">Positive</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
+                  <span className="text-gray-600">Negative</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 bg-gray-200 rounded-full"></div>
+                  <span className="text-gray-600">Neutral</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Strategic Insights - Reduced max height */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles className="w-4 h-4 text-orange-500" />
+                <h3 className="text-sm font-bold text-gray-900">
+                  Strategic Insights
+                </h3>
+              </div>
+              <div className="space-y-3 max-h-48 overflow-y-auto">
+                {data.strategicInsights?.contentStrategy?.strengths &&
+                  data.strategicInsights.contentStrategy.strengths.length > 0 &&
+                  data.strategicInsights.contentStrategy.strengths
+                    .slice(0, 1)
+                    .map((strength, index) => (
+                      <div
+                        key={`strength-${index}`}
+                        className="p-3 bg-green-50 rounded-xl"
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <CheckCircle className="w-4 h-4 text-green-600" />
+                          <span className="font-semibold text-gray-900 text-sm">
+                            Strength
+                          </span>
+                        </div>
+                        <p className="text-gray-600 text-sm leading-relaxed">
+                          {strength}
+                        </p>
+                      </div>
+                    ))}
+                {data.strategicInsights?.contentStrategy?.opportunities &&
+                  data.strategicInsights.contentStrategy.opportunities.length >
+                    0 &&
+                  data.strategicInsights.contentStrategy.opportunities
+                    .slice(0, 1)
+                    .map((opportunity, index) => (
+                      <div
+                        key={`opportunity-${index}`}
+                        className="p-3 bg-blue-50 rounded-xl"
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <TrendingUp className="w-4 h-4 text-blue-600" />
+                          <span className="font-semibold text-gray-900 text-sm">
+                            Opportunity
+                          </span>
+                        </div>
+                        <p className="text-gray-600 text-sm leading-relaxed">
+                          {opportunity}
+                        </p>
+                      </div>
+                    ))}
+
+                {data.strategicInsights?.contentStrategy?.recommendations &&
+                  data.strategicInsights.contentStrategy.recommendations
+                    .length > 0 &&
+                  data.strategicInsights.contentStrategy.recommendations
+                    .slice(0, 1)
+                    .map((recommendation, index) => (
+                      <div
+                        key={`recommendation-${index}`}
+                        className="p-3 bg-purple-50 rounded-xl"
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <Zap className="w-4 h-4 text-purple-600" />
+                          <span className="font-semibold text-gray-900 text-sm">
+                            Recommendation
+                          </span>
+                        </div>
+                        <p className="text-gray-600 text-sm leading-relaxed">
+                          {recommendation}
+                        </p>
+                      </div>
+                    ))}
+              </div>
+            </div>
+
+            {/* Popular Words - Compact version */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Hash className="w-4 h-4 text-orange-500" />
+                <h3 className="text-sm font-bold text-gray-900">
+                  Popular Words
+                </h3>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {data.wordCloud.slice(0, 4).map((word, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between text-xs"
+                  >
+                    <div className="flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 bg-orange-500 rounded-full"></div>
+                      <span className="font-medium text-gray-900 truncate">
+                        {word.word}
+                      </span>
+                    </div>
+                    <span className="text-gray-500">{word.count}</span>
                   </div>
                 ))}
               </div>

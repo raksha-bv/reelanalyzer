@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { ScrapedReelData } from "./scraper";
 
 interface SentimentResult {
   positive: number;
@@ -6,6 +7,30 @@ interface SentimentResult {
   neutral: number;
   overall: "positive" | "negative" | "neutral";
   score: number;
+}
+
+interface StrategicInsights {
+  contentStrategy: {
+    strengths: string[];
+    weaknesses: string[];
+    opportunities: string[];
+    recommendations: string[];
+  };
+  audienceInsights: {
+    engagementPatterns: string;
+    commentQuality: string;
+    audienceReaction: string;
+  };
+  performanceAnalysis: {
+    viralPotential: "high" | "medium" | "low";
+    reasonsForPerformance: string[];
+    benchmarkComparison: string;
+  };
+  contentOptimization: {
+    suggestedHashtags: string[];
+    bestPostingTime: string;
+    contentImprovements: string[];
+  };
 }
 
 interface CompleteAnalysis {
@@ -45,6 +70,7 @@ interface GeminiAnalysisResponse {
     isSpam?: boolean;
   }>;
   category?: string;
+  strategicInsights?: StrategicInsights;
 }
 
 interface CommentInput {
@@ -68,6 +94,160 @@ class GeminiSentimentAnalyzer {
     this.client = new GoogleGenAI({
       apiKey: apiKey,
     });
+  }
+
+  async generateStrategicInsights(
+    reelData: ScrapedReelData,
+    analysisData: CompleteAnalysis
+  ): Promise<StrategicInsights> {
+    try {
+      const engagementRate =
+        ((reelData.likesCount + reelData.commentsCount) /
+          Math.max(reelData.viewCount, 1)) *
+        100;
+      const spamCount = analysisData.processedComments.filter(
+        (c) => c.isSpam
+      ).length;
+      const totalComments = analysisData.processedComments.length;
+
+      const prompt = `
+You are a social media strategy expert. Analyze this Instagram Reel performance and provide strategic insights.
+
+REEL DATA:
+- Caption: "${reelData.caption}"
+- Views: ${reelData.viewCount}
+- Likes: ${reelData.likesCount}
+- Comments: ${reelData.commentsCount}
+- Duration: ${reelData.duration}s
+- Category: ${analysisData.category}
+- Engagement Rate: ${engagementRate.toFixed(2)}%
+- Spam Comments: ${spamCount}/${totalComments}
+- Uses Original Audio: ${reelData.musicInfo?.uses_original_audio || "Unknown"}
+- Is Sponsored: ${reelData.isSponsored || false}
+
+SENTIMENT ANALYSIS:
+- Caption Sentiment: ${analysisData.captionSentiment.overall} (${
+        analysisData.captionSentiment.score
+      })
+- Comments Sentiment: ${analysisData.commentsSentiment.overall} (${
+        analysisData.commentsSentiment.score
+      })
+
+TOP COMMENTS:
+${analysisData.processedComments
+  .slice(0, 5)
+  .map((c) => `"${c.text}" - ${c.sentiment}`)
+  .join("\n")}
+
+Provide strategic insights in this exact JSON format:
+{
+  "contentStrategy": {
+    "strengths": ["strength1", "strength2", "strength3"],
+    "weaknesses": ["weakness1", "weakness2"],
+    "opportunities": ["opportunity1", "opportunity2"],
+    "recommendations": ["recommendation1", "recommendation2", "recommendation3"]
+  },
+  "audienceInsights": {
+    "engagementPatterns": "description of how audience is engaging",
+    "commentQuality": "assessment of comment quality and authenticity",
+    "audienceReaction": "overall audience reaction and mood"
+  },
+  "performanceAnalysis": {
+    "viralPotential": "high|medium|low",
+    "reasonsForPerformance": ["reason1", "reason2", "reason3"],
+    "benchmarkComparison": "how this performs vs typical content in this category"
+  },
+  "contentOptimization": {
+    "suggestedHashtags": ["#hashtag1", "#hashtag2", "#hashtag3"],
+    "bestPostingTime": "suggested optimal posting time",
+    "contentImprovements": ["improvement1", "improvement2", "improvement3"]
+  }
+}
+
+Focus on:
+1. What made this content successful/unsuccessful
+2. Audience behavior patterns from comments
+3. Content optimization opportunities  
+4. Strategic recommendations for future content
+5. Market positioning insights
+
+Return only the JSON object.
+`;
+
+      const response = await this.client.models.generateContent({
+        model: "gemini-2.5-pro",
+        contents: prompt,
+      });
+
+      const responseText = response.text?.trim();
+      if (!responseText) {
+        return this.getDefaultInsights();
+      }
+
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        console.error("No JSON found in insights response:", responseText);
+        return this.getDefaultInsights();
+      }
+
+      const result = JSON.parse(jsonMatch[0]) as StrategicInsights;
+      return this.validateInsights(result);
+    } catch (error) {
+      console.error("Error generating strategic insights:", error);
+      return this.getDefaultInsights();
+    }
+  }
+
+  private validateInsights(
+    insights: Partial<StrategicInsights>
+  ): StrategicInsights {
+    const defaultInsights = this.getDefaultInsights();
+
+    return {
+      contentStrategy:
+        insights.contentStrategy || defaultInsights.contentStrategy,
+      audienceInsights:
+        insights.audienceInsights || defaultInsights.audienceInsights,
+      performanceAnalysis:
+        insights.performanceAnalysis || defaultInsights.performanceAnalysis,
+      contentOptimization:
+        insights.contentOptimization || defaultInsights.contentOptimization,
+    };
+  }
+
+  private getDefaultInsights(): StrategicInsights {
+    return {
+      contentStrategy: {
+        strengths: ["Content posted successfully"],
+        weaknesses: ["Unable to analyze specific weaknesses"],
+        opportunities: [
+          "Optimize posting schedule",
+          "Engage more with audience",
+        ],
+        recommendations: [
+          "Focus on consistent posting",
+          "Monitor engagement patterns",
+        ],
+      },
+      audienceInsights: {
+        engagementPatterns: "Unable to analyze engagement patterns",
+        commentQuality: "Mixed comment quality observed",
+        audienceReaction: "Neutral audience reaction",
+      },
+      performanceAnalysis: {
+        viralPotential: "medium",
+        reasonsForPerformance: ["Standard content performance"],
+        benchmarkComparison: "Within typical range for category",
+      },
+      contentOptimization: {
+        suggestedHashtags: ["#trending", "#viral", "#content"],
+        bestPostingTime: "Peak engagement hours",
+        contentImprovements: [
+          "Enhance visual quality",
+          "Improve caption engagement",
+        ],
+      },
+    };
   }
 
   async analyzeComplete(
@@ -305,7 +485,9 @@ Return only valid JSON in this exact format:
         return this.getDefaultSentiment();
       }
 
-      const result = JSON.parse(jsonMatch[0]);
+      const result = JSON.parse(
+        jsonMatch[0]
+      ) as GeminiAnalysisResponse["captionSentiment"];
       return this.validateSentimentResult(result);
     } catch (error) {
       console.error("Error analyzing text:", error);
@@ -446,10 +628,7 @@ Return only valid JSON in this exact format:
     return this.analyzeTextFallback(text);
   }
 
-  async analyzeComments(_commentsTexts: string[]): Promise<SentimentResult> {
-    return this.getDefaultSentiment();
-  }
-
+  // Removed unused methods that were causing ESLint warnings
   async analyzeBatchComments(comments: Array<CommentInput>): Promise<
     Array<
       CommentInput & {
@@ -465,11 +644,196 @@ Return only valid JSON in this exact format:
     }));
   }
 
-  async predictCategory(
+  async analyzeCompleteWithInsights(
+    reelData: ScrapedReelData,
+    caption: string,
+    comments: CommentInput[]
+  ): Promise<CompleteAnalysis & { strategicInsights: StrategicInsights }> {
+    if (!comments || comments.length === 0) {
+      const captionSentiment = await this.analyzeTextFallback(caption);
+      return {
+        captionSentiment,
+        commentsSentiment: this.getDefaultSentiment(),
+        processedComments: [],
+        category: "general",
+        strategicInsights: this.getDefaultInsights(),
+      };
+    }
+
+    try {
+      const commentsList = comments
+        .map((comment, index) => `${index + 1}. "${comment.text}"`)
+        .join("\n");
+
+      const engagementRate =
+        ((reelData.likesCount + reelData.commentsCount) /
+          Math.max(reelData.viewCount, 1)) *
+        100;
+
+      // SINGLE COMPREHENSIVE PROMPT
+      const prompt = `
+Analyze the following Instagram reel content comprehensively and provide both sentiment analysis AND strategic insights in a single response.
+
+REEL DATA:
+- Caption: "${caption}"
+- Views: ${reelData.viewCount}
+- Likes: ${reelData.likesCount}
+- Comments: ${reelData.commentsCount}
+- Duration: ${reelData.duration}s
+- Engagement Rate: ${engagementRate.toFixed(2)}%
+- Uses Original Audio: ${reelData.musicInfo?.uses_original_audio || "Unknown"}
+- Is Sponsored: ${reelData.isSponsored || false}
+
+COMMENTS (${comments.length} total):
+${commentsList}
+
+Return only valid JSON in this exact format:
+{
+  "captionSentiment": {
+    "positive": <percentage 0-100>,
+    "negative": <percentage 0-100>,
+    "neutral": <percentage 0-100>,
+    "overall": "<positive|negative|neutral>",
+    "score": <number between -1 and 1>
+  },
+  "commentsSentiment": {
+    "positive": <percentage 0-100>,
+    "negative": <percentage 0-100>,
+    "neutral": <percentage 0-100>,
+    "overall": "<positive|negative|neutral>",
+    "score": <number between -1 and 1>
+  },
+  "comments": [
+    {
+      "index": 1,
+      "sentiment": "<positive|negative|neutral>",
+      "isSpam": <true|false>
+    }
+  ],
+  "category": "<travel|lifestyle|beauty|tech|food|fitness|entertainment|education|business|fashion|art|music|comedy|sports|news|other>",
+  "strategicInsights": {
+    "contentStrategy": {
+      "strengths": ["strength1", "strength2", "strength3"],
+      "weaknesses": ["weakness1", "weakness2"],
+      "opportunities": ["opportunity1", "opportunity2"],
+      "recommendations": ["recommendation1", "recommendation2", "recommendation3"]
+    },
+    "audienceInsights": {
+      "engagementPatterns": "description of how audience is engaging",
+      "commentQuality": "assessment of comment quality and authenticity",
+      "audienceReaction": "overall audience reaction and mood"
+    },
+    "performanceAnalysis": {
+      "viralPotential": "high|medium|low",
+      "reasonsForPerformance": ["reason1", "reason2", "reason3"],
+      "benchmarkComparison": "how this performs vs typical content in this category"
+    },
+    "contentOptimization": {
+      "suggestedHashtags": ["#hashtag1", "#hashtag2", "#hashtag3"],
+      "bestPostingTime": "suggested optimal posting time",
+      "contentImprovements": ["improvement1", "improvement2", "improvement3"]
+    }
+  }
+}
+
+Rules:
+- Analyze ALL ${comments.length} comments individually
+- Provide strategic insights based on the complete analysis
+- Only return the JSON object, no other text
+`;
+
+      const response = await this.client.models.generateContent({
+        model: "gemini-2.5-pro",
+        contents: prompt,
+      });
+
+      const responseText = response.text?.trim();
+      if (!responseText) {
+        throw new Error("Empty response from Gemini");
+      }
+
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        console.error("No JSON found in response:", responseText);
+        return this.getFallbackAnalysisWithInsights(caption, comments);
+      }
+
+      const result: GeminiAnalysisResponse = JSON.parse(jsonMatch[0]);
+
+      const captionSentiment = this.validateSentimentResult(
+        result.captionSentiment
+      );
+      const commentsSentiment = this.validateSentimentResult(
+        result.commentsSentiment
+      );
+
+      const processedComments = comments.map((comment, index) => {
+        const analysis:
+          | { index?: number; sentiment?: string; isSpam?: boolean }
+          | undefined = result.comments?.find(
+          (r: { index?: number }) => r.index === index + 1
+        );
+        return {
+          ...comment,
+          sentiment: this.validateSentimentType(analysis?.sentiment),
+          isSpam: Boolean(analysis?.isSpam),
+        };
+      });
+
+      const validCategories = [
+        "travel",
+        "lifestyle",
+        "beauty",
+        "tech",
+        "food",
+        "fitness",
+        "entertainment",
+        "education",
+        "business",
+        "fashion",
+        "art",
+        "music",
+        "comedy",
+        "sports",
+        "news",
+        "other",
+      ];
+      const category = validCategories.includes(result.category || "")
+        ? result.category!
+        : "general";
+
+      const strategicInsights = this.validateInsights(
+        result.strategicInsights || {}
+      );
+
+      return {
+        captionSentiment,
+        commentsSentiment,
+        processedComments,
+        category,
+        strategicInsights,
+      };
+    } catch (error) {
+      console.error("Error in complete analysis:", error);
+      return this.getFallbackAnalysisWithInsights(caption, comments);
+    }
+  }
+
+  private getFallbackAnalysisWithInsights(
     _caption: string,
-    _commentsTexts: string[]
-  ): Promise<string> {
-    return "general";
+    comments: CommentInput[]
+  ): CompleteAnalysis & { strategicInsights: StrategicInsights } {
+    return {
+      captionSentiment: this.getDefaultSentiment(),
+      commentsSentiment: this.getDefaultSentiment(),
+      processedComments: comments.map((comment) => ({
+        ...comment,
+        sentiment: "neutral" as const,
+        isSpam: false,
+      })),
+      category: "general",
+      strategicInsights: this.getDefaultInsights(),
+    };
   }
 }
 
